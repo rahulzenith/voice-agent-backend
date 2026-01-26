@@ -27,6 +27,34 @@ async def book_appointment(
     
     IMPORTANT: The user must be identified first using identify_user tool.
     
+    RACE CONDITION PREVENTION:
+    This tool uses a database-first approach to prevent race conditions when multiple
+    users try to book the same slot simultaneously:
+    
+    1. **Database UNIQUE Constraint**: The `appointments` table has `UNIQUE(slot_id)`
+       constraint that prevents double-booking at the database level. This is atomic
+       and reliable.
+    
+    2. **No Pre-Checking**: We intentionally skip checking if the slot is booked by
+       another user before inserting. This eliminates the race condition window
+       between check and insert operations.
+    
+    3. **Direct Insert**: We attempt to insert the appointment directly. The database
+       will reject the insert if the slot is already booked, ensuring atomicity.
+    
+    4. **Error Handling**: If a unique constraint violation occurs, we:
+       - Check if it's the same user (duplicate tool call) → Return friendly message
+       - Check if same date/time is booked → Return appropriate error
+       - Otherwise → Treat as race condition (another user booked it)
+    
+    5. **Why This Works**: Database constraints are enforced atomically at the database
+       level, making them immune to race conditions. Even if two users try to book
+       the same slot simultaneously, only one will succeed, and the other will get
+       a clear error message.
+    
+    This approach is more reliable than application-level locking or pre-checking,
+    as it relies on the database's ACID properties to ensure data integrity.
+    
     Args:
         appointment_date: The appointment date in YYYY-MM-DD format (e.g., "2026-01-27")
         appointment_time: The appointment time in HH:MM 24-hour format (e.g., "10:00" for 10 AM, "14:00" for 2 PM)
