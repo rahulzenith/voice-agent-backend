@@ -75,12 +75,12 @@ async def end_conversation(context: RunContext) -> str:
         except Exception as e:
             logger.error(f"Error extracting transcript: {e}")
         
-        # Generate summary
-        summary_text = SummaryService.generate_from_transcript(
+        # Generate summary using LLM
+        summary_text = await SummaryService.generate_from_transcript(
             transcript_text, contact_number or "Unknown", appointments
         )
         
-        # Only booked appointments for frontend
+        # Only scheduled appointments for frontend (exclude cancelled)
         recent_appointments = []
         if appointments:
             scheduled_appointments = [apt for apt in appointments if apt.get("status") == "scheduled"]

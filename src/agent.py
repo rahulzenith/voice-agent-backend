@@ -1,4 +1,5 @@
 import asyncio
+import os
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -176,6 +177,26 @@ async def entrypoint(ctx: JobContext):
         if config.avatar_api_key and config.avatar_id:
             try:
                 from livekit.plugins import bey
+                
+                # Convert LiveKit URL to WebSocket format if needed
+                # Beyond Presence API requires wss:// format, not https://
+                # The bey plugin reads LIVEKIT_URL from environment, so we need to set it
+                livekit_url = config.livekit_url
+                if livekit_url.startswith("https://"):
+                    # Convert https:// to wss://
+                    livekit_url = livekit_url.replace("https://", "wss://", 1)
+                elif not livekit_url.startswith(("ws://", "wss://")):
+                    # If it's not already a WebSocket URL, assume wss://
+                    if livekit_url.startswith("http://"):
+                        livekit_url = livekit_url.replace("http://", "ws://", 1)
+                    else:
+                        # If no protocol, assume wss://
+                        livekit_url = f"wss://{livekit_url}"
+                
+                # Set the environment variable so bey plugin can read it
+                # This ensures the avatar API gets the correct WebSocket URL format
+                os.environ["LIVEKIT_URL"] = livekit_url
+                
                 avatar_session = bey.AvatarSession(
                     avatar_id=config.avatar_id,
                     api_key=config.avatar_api_key,
@@ -228,7 +249,7 @@ async def entrypoint(ctx: JobContext):
         
         # ✅ Send greeting IMMEDIATELY (voice starts, avatar joins in background)
         await session.say(
-            "Hello! I'm Alex, your appointment assistant. May I have your phone number to look up your account?",
+            "Hello! I'm Alex, your appointment assistant. I can assist you in booking, cancelling, and modifying appointments. May I have your phone number to look up your account?",
             allow_interruptions=False  # Disallow interruptions - user should wait for agent to finish
         )
         
