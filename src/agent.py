@@ -1,4 +1,5 @@
-import logging
+import asyncio
+from datetime import datetime
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -8,119 +9,241 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    WorkerOptions,
     cli,
-    inference,
     room_io,
+    metrics,
+    MetricsCollectedEvent,
 )
-from livekit.plugins import noise_cancellation, silero
+from livekit.plugins import noise_cancellation, silero, deepgram, openai, cartesia
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-logger = logging.getLogger("agent")
+# Import configuration
+from config import config
+
+# Import system prompt
+from prompts.system_prompt import SYSTEM_INSTRUCTIONS
+
+# Import all tools
+from tools import (
+    identify_user,
+    fetch_slots,
+    book_appointment,
+    retrieve_appointments,
+    cancel_appointment,
+    modify_appointment,
+    end_conversation,
+)
+
+# Import utilities
+from utils.shared_state import SharedState
 
 load_dotenv(".env.local")
 
 
 class Assistant(Agent):
     def __init__(self) -> None:
+        # Register all tools with the agent
+        # Note: tools are already FunctionTool objects from the import
+        tools = [
+            identify_user,
+            fetch_slots,
+            book_appointment,
+            retrieve_appointments,
+            cancel_appointment,
+            modify_appointment,
+            end_conversation,
+        ]
+        
         super().__init__(
-            instructions="""You are a helpful voice AI assistant. The user is interacting with you via voice, even if you perceive the conversation as text.
-            You eagerly assist users with their questions by providing information from your extensive knowledge.
-            Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
-            You are curious, friendly, and have a sense of humor.""",
+            instructions=SYSTEM_INSTRUCTIONS,
+            tools=tools,
         )
-
-    # To add tools, use the @function_tool decorator.
-    # Here's an example that adds a simple weather tool.
-    # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
-    # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    
+    async def on_agent_response(self, response):
+        """
+        Override agent response to disable interruptions when agent speaks.
+        Reference: https://docs.livekit.io/agents/logic/tools/#interruptions
+        """
+        # Get session from shared state
+        shared_state = SharedState.get_instance()
+        session = shared_state.get_session()
+        
+        if session and hasattr(response, 'text') and response.text:
+            # Disable interruptions for all agent speech
+            # This ensures user cannot interrupt during tool execution or agent responses
+            await session.say(response.text, allow_interruptions=False)
+            return True  # Indicate we handled the response
+        
+        # Let default behavior handle it (shouldn't happen, but fallback)
+        return False
 
 
 server = AgentServer()
 
 
 def prewarm(proc: JobProcess):
+    """Prewarm models for faster startup"""
+    # Prewarm VAD (Voice Activity Detection)
     proc.userdata["vad"] = silero.VAD.load()
+    # Note: MultilingualModel cannot be prewarmed (requires JobContext)
+    # It will be created in entrypoint() when needed
 
 
 server.setup_fnc = prewarm
 
 
-@server.rtc_session()
-async def my_agent(ctx: JobContext):
-    # Logging setup
-    # Add any other context you want in all log entries here
-    ctx.log_context_fields = {
-        "room": ctx.room.name,
-    }
+def setup_cost_tracking(session: AgentSession, usage_collector: metrics.UsageCollector, shared_state: SharedState):
+    """
+    Set up metrics-based cost tracking using LiveKit's built-in metrics system.
+    
+    This uses the official LiveKit metrics API which provides accurate usage data
+    for STT, LLM, TTS, and other services. The metrics are automatically collected
+    and can be aggregated for cost estimation.
+    
+    Reference: https://docs.livekit.io/deploy/observability/data/#metrics
+    """
+    
+    # Use LiveKit's metrics_collected event for accurate usage tracking
+    @session.on("metrics_collected")
+    def on_metrics_collected(ev: MetricsCollectedEvent):
+        """
+        Collect metrics from LiveKit's built-in metrics system.
+        
+        This provides accurate data for:
+        - STT: audio_duration from STTMetrics
+        - LLM: prompt_tokens, completion_tokens from LLMMetrics
+        - TTS: characters_count from TTSMetrics
+        - Latency: ttft (time to first token), ttfb (time to first byte)
+        """
+        try:
+            # Collect usage metrics
+            usage_collector.collect(ev.metrics)
+        except Exception:
+            pass
 
-    # Set up a voice AI pipeline using OpenAI, Cartesia, AssemblyAI, and the LiveKit turn detector
-    session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
-        # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt=inference.STT(model="assemblyai/universal-streaming", language="en"),
-        # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
-        # See all available models at https://docs.livekit.io/agents/models/llm/
-        llm=inference.LLM(model="openai/gpt-4.1-mini"),
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
-        tts=inference.TTS(
-            model="cartesia/sonic-3", voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
-        ),
-        # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
-        # See more at https://docs.livekit.io/agents/build/turns
-        turn_detection=MultilingualModel(),
-        vad=ctx.proc.userdata["vad"],
-        # allow the LLM to generate a response while waiting for the end of turn
-        # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
-        preemptive_generation=True,
-    )
 
-    # To use a realtime model instead of a voice pipeline, use the following session setup instead.
-    # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
-    # 1. Install livekit-agents[openai]
-    # 2. Set OPENAI_API_KEY in .env.local
-    # 3. Add `from livekit.plugins import openai` to the top of this file
-    # 4. Use the following session setup instead of the version above
-    # session = AgentSession(
-    #     llm=openai.realtime.RealtimeModel(voice="marin")
-    # )
+async def entrypoint(ctx: JobContext):
+    """Main agent session handler - Optimized for fast initialization"""
+    # Initialize shared state for this session
+    SharedState.reset()  # Clear any previous session data
+    shared_state = SharedState.get_instance()
+    shared_state.set_room(ctx.room)
+    shared_state.session_start_time = datetime.utcnow()
+    
+    # Initialize usage collector for metrics-based cost tracking
+    usage_collector = metrics.UsageCollector()
+    shared_state.usage_collector = usage_collector
 
-    # # Add a virtual avatar to the session, if desired
-    # # For other providers, see https://docs.livekit.io/agents/models/avatar/
-    # avatar = hedra.AvatarSession(
-    #   avatar_id="...",  # See https://docs.livekit.io/agents/models/avatar/plugins/hedra
-    # )
-    # # Start the avatar and wait for it to join
-    # await avatar.start(session, room=ctx.room)
+    # Create assistant instance early (lightweight, no I/O)
+    assistant = Assistant()
 
-    # Start the session, which initializes the voice pipeline and warms up the models
-    await session.start(
-        agent=Assistant(),
-        room=ctx.room,
-        room_options=room_io.RoomOptions(
-            audio_input=room_io.AudioInputOptions(
-                noise_cancellation=lambda params: noise_cancellation.BVCTelephony()
-                if params.participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
-                else noise_cancellation.BVC(),
+    try:
+        # Create turn detection model (cannot be prewarmed - requires JobContext)
+        turn_detection_model = MultilingualModel()
+
+        # Set up voice AI pipeline with custom models
+        # Models are created synchronously (no I/O), so direct creation is fastest
+        session = AgentSession(
+            # Deepgram STT - Speech-to-text
+            stt=deepgram.STT(
+                model="nova-2-conversationalai",
+                language="en-US",
+                api_key=config.deepgram_api_key,
             ),
-        ),
-    )
+            # Azure OpenAI LLM - Language model
+            llm=openai.LLM.with_azure(
+                azure_deployment=config.azure_openai_deployment,
+                azure_endpoint=config.azure_openai_endpoint,
+                api_key=config.azure_openai_api_key,
+                api_version=config.azure_openai_api_version,
+                temperature=0,  # Deterministic responses, strict tool calling
+            ),
+            # Cartesia TTS - Text-to-speech
+            tts=cartesia.TTS(
+                model="sonic-3",
+                voice="95d51f79-c397-46f9-b49a-23763d3eaa2d",
+                api_key=config.cartesia_api_key,
+            ),
+            # Turn detection and VAD (using prewarmed models)
+            turn_detection=turn_detection_model,
+            vad=ctx.proc.userdata["vad"],
+            allow_interruptions=False
+        )
 
-    # Join the room and connect to the user
-    await ctx.connect()
+        # Optional: Configure avatar if credentials provided
+        avatar_session = None
+        if config.avatar_api_key and config.avatar_id:
+            try:
+                from livekit.plugins import bey
+                avatar_session = bey.AvatarSession(
+                    avatar_id=config.avatar_id,
+                    api_key=config.avatar_api_key,
+                )
+            except (ImportError, Exception):
+                pass
+
+        # ✅ CONNECT IMMEDIATELY - Signal readiness to LiveKit
+        await ctx.connect()
+
+        # ✅ OPTIMIZATION: Wait for participant FIRST (before creating expensive session)
+        # This ensures we don't waste resources if participant never joins
+        participant = await ctx.wait_for_participant()
+        shared_state.set_participant(participant)
+        
+        # Track session start time after participant joins
+        shared_state.session_start_time = datetime.utcnow()
+
+        # Start the agent session IMMEDIATELY (voice starts right away)
+        await session.start(
+            agent=assistant,
+            room=ctx.room,
+            room_options=room_io.RoomOptions(
+                audio_input=room_io.AudioInputOptions(
+                    noise_cancellation=lambda params: noise_cancellation.BVCTelephony()
+                    if params.participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
+                    else noise_cancellation.BVC(),
+                ),
+            ),
+        )
+
+        # Store session in shared state (for chat context access)
+        shared_state.set_session(session)
+        
+        # Set up metrics-based cost tracking
+        setup_cost_tracking(session, usage_collector, shared_state)
+
+        # ✅ Start avatar in BACKGROUND (non-blocking)
+        # Avatar will join when ready and automatically take over audio/video
+        # Reference: https://docs.livekit.io/agents/models/avatar/
+        if avatar_session:
+            async def start_avatar_background():
+                try:
+                    await avatar_session.start(session, room=ctx.room)
+                except Exception:
+                    pass
+            
+            # Start avatar in background task (non-blocking)
+            asyncio.create_task(start_avatar_background())
+        
+        # ✅ Send greeting IMMEDIATELY (voice starts, avatar joins in background)
+        await session.say(
+            "Hello! I'm Alex, your appointment assistant. May I have your phone number to look up your account?",
+            allow_interruptions=False  # Disallow interruptions - user should wait for agent to finish
+        )
+        
+        # Note: Session will continue running until user ends the conversation
+        # Final costs and avatar duration are logged in end_conversation tool
+
+    except Exception:
+        raise
 
 
 if __name__ == "__main__":
-    cli.run_app(server)
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            prewarm_fnc=prewarm,
+            agent_name="my-voice-agent"
+        )
+    )

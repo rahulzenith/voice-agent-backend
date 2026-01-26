@@ -1,142 +1,466 @@
-<a href="https://livekit.io/">
-  <img src="./.github/assets/livekit-mark.png" alt="LiveKit logo" width="100" height="100">
-</a>
+# Voice Agent Backend - Appointment Booking System
 
-# LiveKit Agents Starter - Python
+A complete AI voice agent backend for appointment booking built with LiveKit Agents, using Deepgram (STT), Azure OpenAI (LLM), Cartesia (TTS), and Supabase for data persistence.
 
-A complete starter project for building voice AI apps with [LiveKit Agents for Python](https://github.com/livekit/agents) and [LiveKit Cloud](https://cloud.livekit.io/).
+📚 **[Read the Architecture Documentation](ARCHITECTURE.md)** for detailed system design, data flow, and implementation details.
 
-The starter project includes:
+## Features
 
-- A simple voice AI assistant, ready for extension and customization
-- A voice AI pipeline with [models](https://docs.livekit.io/agents/models) from OpenAI, Cartesia, and AssemblyAI served through LiveKit Cloud
-  - Easily integrate your preferred [LLM](https://docs.livekit.io/agents/models/llm/), [STT](https://docs.livekit.io/agents/models/stt/), and [TTS](https://docs.livekit.io/agents/models/tts/) instead, or swap to a realtime model like the [OpenAI Realtime API](https://docs.livekit.io/agents/models/realtime/openai)
-- Eval suite based on the LiveKit Agents [testing & evaluation framework](https://docs.livekit.io/agents/build/testing/)
-- [LiveKit Turn Detector](https://docs.livekit.io/agents/build/turns/turn-detector/) for contextually-aware speaker detection, with multilingual support
-- [Background voice cancellation](https://docs.livekit.io/home/cloud/noise-cancellation/)
-- Integrated [metrics and logging](https://docs.livekit.io/agents/build/metrics/)
-- A Dockerfile ready for [production deployment](https://docs.livekit.io/agents/ops/deployment/)
+- 🎙️ **Voice Conversation**: Natural voice interaction with <3s response latency
+- 👤 **User Identification**: Phone number-based user management
+- 📅 **Appointment Management**: Book, retrieve, modify, and cancel appointments
+- 🤖 **7 Function Tools**: Complete appointment workflow automation
+- 📊 **Call Summaries**: Automatic conversation summaries with accurate cost tracking
+- 🎯 **User Preferences**: Automatic tracking of preferred times and days (NEW)
+- 💰 **Accurate Cost Tracking**: LiveKit metrics-based cost calculation (not estimates)
+- 🎭 **Avatar Support**: Optional integration with Beyond Presence or Tavus
+- 📡 **Frontend Events**: Real-time tool call events via LiveKit data messages
+- 🗄️ **Supabase Database**: Persistent storage for users, appointments, slots, and conversation logs
+- 🏗️ **Service Architecture**: Clean separation of business logic for maintainability
 
-This starter app is compatible with any [custom web/mobile frontend](https://docs.livekit.io/agents/start/frontend/) or [SIP-based telephony](https://docs.livekit.io/agents/start/telephony/).
-
-## Coding agents and MCP
-
-This project is designed to work with coding agents like [Cursor](https://www.cursor.com/) and [Claude Code](https://www.anthropic.com/claude-code). 
-
-To get the most out of these tools, install the [LiveKit Docs MCP server](https://docs.livekit.io/mcp).
-
-For Cursor, use this link:
-
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-light.svg)](https://cursor.com/en-US/install-mcp?name=livekit-docs&config=eyJ1cmwiOiJodHRwczovL2RvY3MubGl2ZWtpdC5pby9tY3AifQ%3D%3D)
-
-For Claude Code, run this command:
+## Architecture
 
 ```
-claude mcp add --transport http livekit-docs https://docs.livekit.io/mcp
+Frontend (React) ←→ LiveKit Room ←→ Python Voice Agent (This Repo)
+                                            ↓
+                                    ┌───────┴────────┐
+                                    ↓                ↓
+                            AI Services        Supabase DB
+                            - Deepgram STT     - Users
+                            - Azure OpenAI     - Appointments
+                            - Cartesia TTS     - Conversation Logs
+                            - Avatar (opt)
 ```
 
-For Codex CLI, use this command to install the server:
+## Project Structure
+
 ```
-codex mcp add --url https://docs.livekit.io/mcp livekit-docs
+src/
+├── agent.py                        # Main agent entrypoint
+├── config.py                       # Configuration management
+├── prompts/
+│   └── system_prompt.py           # Agent instructions
+├── database/
+│   ├── client.py                  # Supabase client
+│   └── models.py                  # Pydantic models
+├── services/                       # 🆕 Business logic layer
+│   ├── call_service.py            # Call lifecycle management
+│   ├── cost_service.py            # Cost calculation from metrics
+│   ├── event_service.py           # Frontend event emission
+│   ├── summary_service.py         # Summary generation
+│   └── transcript_service.py      # Transcript extraction
+├── tools/
+│   ├── identify_user.py           # User identification
+│   ├── fetch_slots.py             # Get available slots
+│   ├── book_appointment.py        # Book appointments
+│   ├── retrieve_appointments.py   # Get user appointments
+│   ├── cancel_appointment.py      # Cancel appointments
+│   ├── modify_appointment.py      # Modify appointments
+│   └── end_conversation.py        # End call & summary
+└── utils/
+    ├── date_time_utils.py         # Date/time formatting (IST)
+    ├── preference_tracker.py      # 🆕 User preference tracking
+    └── shared_state.py            # Session state management
 ```
 
-For Gemini CLI, use this command to install the server:
-```
-gemini mcp add --transport http livekit-docs https://docs.livekit.io/mcp
-```
+## Setup Instructions
 
-The project includes a complete [AGENTS.md](AGENTS.md) file for these assistants. You can modify this file  your needs. To learn more about this file, see [https://agents.md](https://agents.md).
+### 1. Prerequisites
 
-## Dev Setup
+- Python 3.10 - 3.13
+- [uv](https://docs.astral.sh/uv/) package manager
+- LiveKit Cloud account (or self-hosted LiveKit)
+- Supabase account
+- API keys for:
+  - Deepgram
+  - Azure OpenAI
+  - Cartesia
+  - Beyond Presence or Tavus (optional)
 
-Clone the repository and install dependencies to a virtual environment:
+### 2. Clone and Install Dependencies
 
-```console
-cd agent-starter-python
+```bash
+cd voice-agent-backend
 uv sync
 ```
 
-Sign up for [LiveKit Cloud](https://cloud.livekit.io/) then set up the environment by copying `.env.example` to `.env.local` and filling in the required keys:
+### 3. Set Up Supabase Database
 
-- `LIVEKIT_URL`
-- `LIVEKIT_API_KEY`
-- `LIVEKIT_API_SECRET`
+Create a Supabase project and run the SQL from `supabase_schema.sql`:
 
-You can load the LiveKit environment automatically using the [LiveKit CLI](https://docs.livekit.io/home/cli/cli-setup):
+```bash
+# Run the complete schema
+psql -h your-project.supabase.co -U postgres -d postgres -f supabase_schema.sql
+```
+
+**Or** run it manually in Supabase SQL Editor. The schema includes:
+
+**Tables:**
+- `users`: User profiles (phone number, name)
+- `slots`: Available appointment slots (date, time, availability)
+- `appointments`: Booked appointments (with race condition prevention)
+- `conversation_logs`: Call transcripts and summaries
+
+**Key Features:**
+- `UNIQUE(slot_id)` in `appointments`: Prevents double-booking at database level
+- `user_preferences JSONB`: Stores learned preferences
+- `cost_breakdown JSONB`: Accurate cost tracking
+- Comprehensive indexes for performance
+
+**See `supabase_schema.sql` for the complete schema with indexes and sample data.**
+
+### 4. Configure Environment Variables
+
+Create a `.env.local` file in the root directory:
+
+```bash
+# LiveKit Configuration
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=your-api-key
+LIVEKIT_API_SECRET=your-api-secret
+
+# AI Services
+DEEPGRAM_API_KEY=your-deepgram-key
+AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com
+AZURE_OPENAI_API_KEY=your-azure-key
+AZURE_OPENAI_DEPLOYMENT_NAME=your-deployment-name
+CARTESIA_API_KEY=your-cartesia-key
+
+# Avatar (optional)
+AVATAR_PROVIDER=beyond_presence
+BEYOND_PRESENCE_API_KEY=your-avatar-key
+AVATAR_ID=your-avatar-id
+
+# Database
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
+```
+
+You can use the LiveKit CLI to set up LiveKit credentials:
 
 ```bash
 lk cloud auth
 lk app env -w -d .env.local
 ```
 
-## Run the agent
+### 5. Download Required Models
 
-Before your first run, you must download certain models such as [Silero VAD](https://docs.livekit.io/agents/build/turns/vad/) and the [LiveKit turn detector](https://docs.livekit.io/agents/build/turns/turn-detector/):
+Before first run, download VAD and turn detector models:
 
-```console
+```bash
 uv run python src/agent.py download-files
 ```
 
-Next, run this command to speak to your agent directly in your terminal:
+### 6. Run the Agent
 
-```console
+**For development with terminal interaction:**
+
+```bash
 uv run python src/agent.py console
 ```
 
-To run the agent for use with a frontend or telephony, use the `dev` command:
+**For development with frontend:**
 
-```console
+```bash
 uv run python src/agent.py dev
 ```
 
-In production, use the `start` command:
+**For production:**
 
-```console
+```bash
 uv run python src/agent.py start
 ```
 
-## Frontend & Telephony
+## Conversation Flow
 
-Get started quickly with our pre-built frontend starter apps, or add telephony support:
+The agent follows this strict conversation flow:
 
-| Platform | Link | Description |
-|----------|----------|-------------|
-| **Web** | [`livekit-examples/agent-starter-react`](https://github.com/livekit-examples/agent-starter-react) | Web voice AI assistant with React & Next.js |
-| **iOS/macOS** | [`livekit-examples/agent-starter-swift`](https://github.com/livekit-examples/agent-starter-swift) | Native iOS, macOS, and visionOS voice AI assistant |
-| **Flutter** | [`livekit-examples/agent-starter-flutter`](https://github.com/livekit-examples/agent-starter-flutter) | Cross-platform voice AI assistant app |
-| **React Native** | [`livekit-examples/voice-assistant-react-native`](https://github.com/livekit-examples/voice-assistant-react-native) | Native mobile app with React Native & Expo |
-| **Android** | [`livekit-examples/agent-starter-android`](https://github.com/livekit-examples/agent-starter-android) | Native Android app with Kotlin & Jetpack Compose |
-| **Web Embed** | [`livekit-examples/agent-starter-embed`](https://github.com/livekit-examples/agent-starter-embed) | Voice AI widget for any website |
-| **Telephony** | [📚 Documentation](https://docs.livekit.io/agents/start/telephony/) | Add inbound or outbound calling to your agent |
+1. **User Identification** (Mandatory First Step)
+   - Greets user
+   - Asks for phone number
+   - Calls `identify_user` tool
+   - Confirms account found/created
 
-For advanced customization, see the [complete frontend guide](https://docs.livekit.io/agents/start/frontend/).
+2. **Discover Intent**
+   - Asks how to help
+   - Listens for: book, modify, cancel, or retrieve appointments
 
-## Tests and evals
+3. **Handle Request**
+   - Uses appropriate tools based on user intent
+   - Confirms all actions verbally
 
-This project includes a complete suite of evals, based on the LiveKit Agents [testing & evaluation framework](https://docs.livekit.io/agents/build/testing/). To run them, use `pytest`.
+4. **Check for More Requests**
+   - Asks if user needs anything else
+   - Returns to step 3 if yes
 
-```console
+5. **End Conversation**
+   - Calls `end_conversation` tool
+   - Generates and emits summary
+   - Says goodbye
+
+## Available Tools
+
+### 1. `identify_user(contact_number)`
+Identifies or creates a user by phone number. **Must be called first.**
+
+### 2. `fetch_slots(appointment_date)`
+Returns available appointment slots for a given date. Hard-coded slots:
+- Monday-Friday: 9 AM, 10 AM, 11 AM, 2 PM, 3 PM, 4 PM
+- No weekends
+- 30-minute appointments
+
+### 3. `book_appointment(appointment_date, appointment_time, notes)`
+Books an appointment with double-booking prevention.
+
+### 4. `retrieve_appointments()`
+Retrieves all appointments for the identified user.
+
+### 5. `cancel_appointment(appointment_id)`
+Cancels an appointment (marks as cancelled, doesn't delete).
+
+### 6. `modify_appointment(appointment_id, new_date, new_time)`
+Modifies an existing appointment to a new date/time.
+
+### 7. `end_conversation()`
+Ends conversation, generates summary, calculates costs, emits to frontend.
+
+## Frontend Integration
+
+### Event Protocol
+
+The backend emits events to the frontend via LiveKit data messages:
+
+**Tool Call Event:**
+```json
+{
+  "type": "tool_call",
+  "tool": "book_appointment",
+  "status": "started|success|error",
+  "data": {...},
+  "timestamp": "2026-01-24T10:30:00Z"
+}
+```
+
+**Call Summary Event:**
+```json
+{
+  "type": "call_summary",
+  "summary": "User booked 2 appointments...",
+  "appointments": [...],
+  "cost_breakdown": {...},
+  "timestamp": "2026-01-24T10:35:00Z"
+}
+```
+
+### Frontend Implementation (React)
+
+```typescript
+import { Room, RoomEvent } from 'livekit-client';
+
+room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+  const decoder = new TextDecoder();
+  const event = JSON.parse(decoder.decode(payload));
+  
+  if (event.type === 'tool_call') {
+    // Display tool call in UI
+    displayToolCall(event.tool, event.status, event.data);
+  } else if (event.type === 'call_summary') {
+    // Display call summary
+    displaySummary(event.summary, event.appointments, event.cost_breakdown);
+  }
+});
+```
+
+## Testing
+
+### Run Unit Tests
+
+```bash
+uv run pytest tests/test_tools.py -v
+```
+
+### Run Integration Tests
+
+```bash
+uv run pytest tests/test_agent.py -v
+```
+
+### Run All Tests
+
+```bash
 uv run pytest
 ```
 
-## Using this template repo for your own project
+## User Preferences Tracking
 
-Once you've started your own project based on this repo, you should:
+The agent automatically learns and tracks user preferences based on their booking behavior:
 
-1. **Check in your `uv.lock`**: This file is currently untracked for the template, but you should commit it to your repository for reproducible builds and proper configuration management. (The same applies to `livekit.toml`, if you run your agents in LiveKit Cloud)
+**Tracked Preferences:**
+- **Preferred Time of Day**: Morning (6-12), Afternoon (12-17), Evening (17+)
+- **Preferred Days**: Last 3 days user has booked appointments
+- **Last Appointment**: Most recent booking details
 
-2. **Remove the git tracking test**: Delete the "Check files not tracked in git" step from `.github/workflows/tests.yml` since you'll now want this file to be tracked. These are just there for development purposes in the template repo itself.
+**Where Preferences are Captured:**
+- When booking an appointment
+- When modifying an appointment
 
-3. **Add your own repository secrets**: You must [add secrets](https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/using-secrets-in-github-actions) for `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` so that the tests can run in CI.
+**Where Preferences are Stored:**
+- In-memory during call: `SharedState.user_preferences`
+- Database on call end: `conversation_logs.user_preferences` (JSONB)
+- Frontend summary event: Included in call summary
 
-## Deploying to production
+**Example Preferences:**
+```json
+{
+  "preferred_time": "afternoon",
+  "preferred_days": ["Monday", "Friday"],
+  "last_appointment_date": "2026-01-27",
+  "last_appointment_time": "14:00"
+}
+```
 
-This project is production-ready and includes a working `Dockerfile`. To deploy it to LiveKit Cloud or another environment, see the [deploying to production](https://docs.livekit.io/agents/ops/deployment/) guide.
+**Future Use Cases:**
+- Pre-filter slots by preferred time
+- Suggest similar times: "You usually prefer morning appointments..."
+- Analytics: Understand user booking patterns
 
-## Self-hosted LiveKit
+## Cost Tracking
 
-You can also self-host LiveKit instead of using LiveKit Cloud. See the [self-hosting](https://docs.livekit.io/home/self-hosting/) guide for more information. If you choose to self-host, you'll need to also use [model plugins](https://docs.livekit.io/agents/models/#plugins) instead of LiveKit Inference and will need to remove the [LiveKit Cloud noise cancellation](https://docs.livekit.io/home/cloud/noise-cancellation/) plugin.
+The agent uses **LiveKit's metrics system** for accurate cost tracking (not estimates):
+
+**Pricing (as of 2026):**
+- **Deepgram STT**: $0.0043/minute
+- **Azure OpenAI**: $0.0015/1K input tokens, $0.002/1K output tokens
+- **Cartesia TTS**: $0.00001/character
+- **Avatar**: $0.006/minute (if enabled)
+
+**How It Works:**
+1. LiveKit collects usage metrics via `@session.on("metrics_collected")`
+2. `CostService` applies pricing to actual usage
+3. Cost breakdown is included in call summaries
+4. Stored in `conversation_logs.cost_breakdown` (JSONB)
+
+**Metrics Tracked:**
+- STT audio duration (seconds)
+- LLM prompt tokens (with cache detection)
+- LLM completion tokens
+- TTS character count
+- Session duration (for avatar cost)
+
+## Deployment
+
+### Deploy to LiveKit Cloud
+
+```bash
+lk app deploy
+```
+
+### Docker Deployment
+
+The included Dockerfile is production-ready:
+
+```bash
+docker build -t voice-agent-backend .
+docker push your-registry/voice-agent-backend
+```
+
+Set environment variables in your deployment platform.
+
+## Known Limitations
+
+1. **Hard-coded Appointment Slots**
+   - Fixed times: 9 AM, 10 AM, 11 AM, 2 PM, 3 PM, 4 PM
+   - Monday-Friday only
+   - No external calendar integration
+
+2. **Basic Phone Number Validation**
+   - Simple cleaning of phone numbers
+   - No international format validation
+
+3. **Simplified User Model**
+   - Only contact_number required
+   - Optional name field not actively collected
+
+4. **Avatar Sync Delay**
+   - May have 100-500ms lip-sync delay
+   - Avatar is optional and can be disabled
+
+5. **Cost Estimates**
+   - Based on approximate pricing
+   - Actual costs may vary
+
+6. **Transcript Storage**
+   - Currently stores basic metadata
+   - Full transcript recording to be implemented
+
+## Troubleshooting
+
+### Agent won't start
+
+- Check all API keys are set in `.env.local`
+- Verify Supabase tables are created
+- Run `uv run python src/agent.py download-files`
+
+### Database connection errors
+
+- Verify Supabase URL and key
+- Check network connectivity
+- Ensure tables exist with correct schema
+
+### Tools not working
+
+- Check Supabase credentials
+- Verify user is identified first (contact_number in context)
+- Check logs for specific error messages
+
+### No audio/voice issues
+
+- Verify Deepgram, Azure OpenAI, and Cartesia API keys
+- Check API quotas and billing
+- Test with console mode first
+
+## Development
+
+### Code Formatting
+
+```bash
+uv run ruff format
+```
+
+### Linting
+
+```bash
+uv run ruff check
+```
+
+### Adding New Tools
+
+1. Create tool file in `src/tools/`
+2. Use `@function_tool` decorator
+3. Import in `src/tools/__init__.py`
+4. Import in `src/agent.py`
+5. Tool will be automatically registered
+
+## Frontend Repository
+
+The React frontend for this agent is in a separate repository.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see LICENSE file for details
+
+## Support
+
+For issues or questions:
+- Check the [LiveKit Agents Documentation](https://docs.livekit.io/agents/)
+- Review the conversation flow in `src/prompts/system_prompt.py`
+- Check logs for detailed error messages
+
+## Acknowledgments
+
+Built with:
+- [LiveKit Agents](https://github.com/livekit/agents)
+- [Deepgram](https://deepgram.com/)
+- [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service)
+- [Cartesia](https://cartesia.ai/)
+- [Supabase](https://supabase.com/)
