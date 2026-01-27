@@ -103,6 +103,78 @@ The system uses a **non-blocking approach**:
 
 ---
 
+## LiveKit Cloud Worker Cold Starts
+
+### Overview
+
+When deploying the agent to LiveKit Cloud, workers are automatically shut down after periods of inactivity to optimize resource usage and costs. This can cause delays when starting a new conversation if the worker is not already running.
+
+### Why Cold Starts Occur
+
+1. **Automatic Shutdown**
+   - LiveKit Cloud shuts down idle workers after a period of inactivity
+   - This is a cost-saving and resource optimization feature
+   - Workers are started on-demand when a new job request arrives
+
+2. **Worker Initialization Time**
+   - When a worker is shut down, it must be restarted before processing requests
+   - This includes:
+     - Container initialization
+     - Dependency loading
+     - Agent process startup
+     - Plugin initialization (STT, TTS, LLM, Avatar)
+   - This process typically takes 2-5 seconds
+
+3. **Network Latency**
+   - Additional network round-trips for worker registration
+   - Connection establishment to LiveKit Cloud
+   - Room creation and participant joining
+
+### Impact on User Experience
+
+#### Initial Load Delay
+- **First request after inactivity**: 3-8 seconds delay before agent responds
+- **Subsequent requests**: Immediate (worker is already running)
+- **User sees**: "Initializing..." or loading state for several seconds
+
+#### Potential Solutions
+
+1. **Page Reload**
+   - If the agent doesn't respond after 10-15 seconds, users can reload the page
+   - This will trigger a new job request and worker initialization
+   - **Note**: This is a workaround, not a permanent solution
+
+2. **Keep-Alive Mechanism** (Future Enhancement)
+   - Implement periodic health checks to keep workers warm
+   - Use scheduled jobs to ping the agent periodically
+   - Trade-off: Increased costs vs. better user experience
+
+3. **User Communication**
+   - Show a clear loading message: "Starting agent, please wait..."
+   - Set user expectations about potential delays
+   - Consider a timeout indicator
+
+### Typical Timing
+
+- **Cold start (worker down)**: 3-8 seconds
+- **Warm start (worker running)**: <1 second
+- **Timeout threshold**: If no response after 15 seconds, consider reloading
+
+### Best Practices
+
+1. **Set Realistic Expectations**: Inform users that the first request may take a few seconds
+2. **Implement Timeouts**: Show a timeout message if initialization takes too long
+3. **Provide Reload Option**: Allow users to manually reload if stuck
+4. **Monitor Worker Status**: Track cold start frequency and duration
+5. **Consider Keep-Alive**: For production systems with high traffic, consider implementing keep-alive mechanisms
+
+### References
+
+- [LiveKit Cloud Documentation](https://docs.livekit.io/cloud/)
+- [LiveKit Agents Deployment](https://docs.livekit.io/agents/deploy/)
+
+---
+
 ## Other Limitations
 
 ### Database Constraints
