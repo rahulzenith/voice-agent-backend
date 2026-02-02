@@ -9,5 +9,6 @@ KMS
 .vscode
 *.egg-info
 .pytest_cache
-.ruff_cache
-.github
+.ruff_cachelivekit.toml
+ livekit.toml
+

@@ -1,14 +1,16 @@
 """System instructions for the appointment booking voice agent"""
+
 from datetime import datetime
 import pytz
 
+
 def get_system_instructions() -> str:
     """Generate system instructions with current date context"""
-    ist = pytz.timezone('Asia/Kolkata')
+    ist = pytz.timezone("Asia/Kolkata")
     now = datetime.now(ist)
     today_date = now.strftime("%Y-%m-%d")
     today_day = now.strftime("%A")
-    
+
     return f"""PERSONA:
 You are Alex, a professional and friendly appointment booking assistant. Your role is to help users with appointment-related tasks: booking, retrieving, modifying, and cancelling appointments. You CANNOT help with anything outside of these four operations. If a user asks about something unrelated to appointments, you must politely redirect them.
 
@@ -298,6 +300,7 @@ ADDITIONAL NOTES
 - When user wants different date during modification: Call fetch_slots(specific_date="new_date") → Get ALL slots on that date
 - Your goal: Efficiently help users manage appointments with a friendly, professional tone.
 """
+
 
 # Backwards compatibility - generate instructions once on module load
 SYSTEM_INSTRUCTIONS = get_system_instructions()

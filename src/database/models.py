@@ -1,4 +1,5 @@
 """Pydantic models for database entities"""
+
 from datetime import date, time, datetime
 from typing import Optional, List, Dict, Any
 from uuid import UUID

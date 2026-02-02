@@ -1,4 +1,5 @@
 """Unit tests for appointment booking tools"""
+
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import date, time
@@ -8,6 +9,7 @@ from livekit.agents import RunContext
 # Import tools
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from tools.identify_user import identify_user
@@ -119,12 +121,14 @@ class TestBookAppointment:
 
         # Mock successful insert
         mock_supabase_client.table.return_value.insert.return_value.execute.return_value = Mock(
-            data=[{
-                "id": "test-id",
-                "contact_number": "5551234",
-                "appointment_date": "2026-01-27",
-                "appointment_time": "09:00"
-            }]
+            data=[
+                {
+                    "id": "test-id",
+                    "contact_number": "5551234",
+                    "appointment_date": "2026-01-27",
+                    "appointment_time": "09:00",
+                }
+            ]
         )
 
         result = await book_appointment(mock_context, "2026-01-27", "09:00", "")
@@ -143,7 +147,9 @@ class TestRetrieveAppointments:
     """Tests for retrieve_appointments tool"""
 
     @pytest.mark.asyncio
-    async def test_retrieve_appointments_success(self, mock_context, mock_supabase_client):
+    async def test_retrieve_appointments_success(
+        self, mock_context, mock_supabase_client
+    ):
         """Test retrieving appointments"""
         mock_context.store["contact_number"] = "5551234"
 
@@ -154,7 +160,7 @@ class TestRetrieveAppointments:
                     "id": "apt1",
                     "appointment_date": "2026-01-27",
                     "appointment_time": "09:00",
-                    "status": "scheduled"
+                    "status": "scheduled",
                 }
             ]
         )
@@ -187,12 +193,14 @@ class TestCancelAppointment:
 
         # Mock appointment exists
         mock_supabase_client.table.return_value.select.return_value.eq.return_value.execute.return_value = Mock(
-            data=[{
-                "id": "apt1",
-                "contact_number": "5551234",
-                "appointment_date": "2026-01-27",
-                "appointment_time": "09:00"
-            }]
+            data=[
+                {
+                    "id": "apt1",
+                    "contact_number": "5551234",
+                    "appointment_date": "2026-01-27",
+                    "appointment_time": "09:00",
+                }
+            ]
         )
 
         # Mock successful update
@@ -215,12 +223,14 @@ class TestModifyAppointment:
 
         # Mock appointment exists
         mock_supabase_client.table.return_value.select.return_value.eq.return_value.execute.return_value = Mock(
-            data=[{
-                "id": "apt1",
-                "contact_number": "5551234",
-                "appointment_date": "2026-01-27",
-                "appointment_time": "09:00"
-            }]
+            data=[
+                {
+                    "id": "apt1",
+                    "contact_number": "5551234",
+                    "appointment_date": "2026-01-27",
+                    "appointment_time": "09:00",
+                }
+            ]
         )
 
         # Mock new slot is available

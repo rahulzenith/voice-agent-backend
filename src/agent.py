@@ -55,12 +55,12 @@ class Assistant(Agent):
             modify_appointment,
             end_conversation,
         ]
-        
+
         super().__init__(
             instructions=SYSTEM_INSTRUCTIONS,
             tools=tools,
         )
-    
+
     async def on_agent_response(self, response):
         """
         Override agent response to disable interruptions when agent speaks.
@@ -69,13 +69,13 @@ class Assistant(Agent):
         # Get session from shared state
         shared_state = SharedState.get_instance()
         session = shared_state.get_session()
-        
-        if session and hasattr(response, 'text') and response.text:
+
+        if session and hasattr(response, "text") and response.text:
             # Disable interruptions for all agent speech
             # This ensures user cannot interrupt during tool execution or agent responses
             await session.say(response.text, allow_interruptions=False)
             return True  # Indicate we handled the response
-        
+
         # Let default behavior handle it (shouldn't happen, but fallback)
         return False
 
@@ -94,23 +94,27 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
-def setup_cost_tracking(session: AgentSession, usage_collector: metrics.UsageCollector, shared_state: SharedState):
+def setup_cost_tracking(
+    session: AgentSession,
+    usage_collector: metrics.UsageCollector,
+    shared_state: SharedState,
+):
     """
     Set up metrics-based cost tracking using LiveKit's built-in metrics system.
-    
+
     This uses the official LiveKit metrics API which provides accurate usage data
     for STT, LLM, TTS, and other services. The metrics are automatically collected
     and can be aggregated for cost estimation.
-    
+
     Reference: https://docs.livekit.io/deploy/observability/data/#metrics
     """
-    
+
     # Use LiveKit's metrics_collected event for accurate usage tracking
     @session.on("metrics_collected")
     def on_metrics_collected(ev: MetricsCollectedEvent):
         """
         Collect metrics from LiveKit's built-in metrics system.
-        
+
         This provides accurate data for:
         - STT: audio_duration from STTMetrics
         - LLM: prompt_tokens, completion_tokens from LLMMetrics
@@ -131,7 +135,7 @@ async def entrypoint(ctx: JobContext):
     shared_state = SharedState.get_instance()
     shared_state.set_room(ctx.room)
     shared_state.session_start_time = datetime.utcnow()
-    
+
     # Initialize usage collector for metrics-based cost tracking
     usage_collector = metrics.UsageCollector()
     shared_state.usage_collector = usage_collector
@@ -169,7 +173,7 @@ async def entrypoint(ctx: JobContext):
             # Turn detection and VAD (using prewarmed models)
             turn_detection=turn_detection_model,
             vad=ctx.proc.userdata["vad"],
-            allow_interruptions=False
+            allow_interruptions=False,
         )
 
         # Optional: Configure avatar if credentials provided
@@ -177,7 +181,7 @@ async def entrypoint(ctx: JobContext):
         if config.avatar_api_key and config.avatar_id:
             try:
                 from livekit.plugins import bey
-                
+
                 # Convert LiveKit URL to WebSocket format if needed
                 # Beyond Presence API requires wss:// format, not https://
                 # The bey plugin reads LIVEKIT_URL from environment, so we need to set it
@@ -192,11 +196,11 @@ async def entrypoint(ctx: JobContext):
                     else:
                         # If no protocol, assume wss://
                         livekit_url = f"wss://{livekit_url}"
-                
+
                 # Set the environment variable so bey plugin can read it
                 # This ensures the avatar API gets the correct WebSocket URL format
                 os.environ["LIVEKIT_URL"] = livekit_url
-                
+
                 avatar_session = bey.AvatarSession(
                     avatar_id=config.avatar_id,
                     api_key=config.avatar_api_key,
@@ -211,7 +215,7 @@ async def entrypoint(ctx: JobContext):
         # This ensures we don't waste resources if participant never joins
         participant = await ctx.wait_for_participant()
         shared_state.set_participant(participant)
-        
+
         # Track session start time after participant joins
         shared_state.session_start_time = datetime.utcnow()
 
@@ -222,7 +226,8 @@ async def entrypoint(ctx: JobContext):
             room_options=room_io.RoomOptions(
                 audio_input=room_io.AudioInputOptions(
                     noise_cancellation=lambda params: noise_cancellation.BVCTelephony()
-                    if params.participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
+                    if params.participant.kind
+                    == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
                     else noise_cancellation.BVC(),
                 ),
             ),
@@ -230,7 +235,7 @@ async def entrypoint(ctx: JobContext):
 
         # Store session in shared state (for chat context access)
         shared_state.set_session(session)
-        
+
         # Set up metrics-based cost tracking
         setup_cost_tracking(session, usage_collector, shared_state)
 
@@ -238,21 +243,22 @@ async def entrypoint(ctx: JobContext):
         # Avatar will join when ready and automatically take over audio/video
         # Reference: https://docs.livekit.io/agents/models/avatar/
         if avatar_session:
+
             async def start_avatar_background():
                 try:
                     await avatar_session.start(session, room=ctx.room)
                 except Exception:
                     pass
-            
+
             # Start avatar in background task (non-blocking)
             asyncio.create_task(start_avatar_background())
-        
+
         # ✅ Send greeting IMMEDIATELY (voice starts, avatar joins in background)
         await session.say(
             "Hello! I'm Alex, your appointment assistant. I can assist you in booking, cancelling, and modifying appointments. May I have your phone number to look up your account?",
-            allow_interruptions=False  # Disallow interruptions - user should wait for agent to finish
+            allow_interruptions=False,  # Disallow interruptions - user should wait for agent to finish
         )
-        
+
         # Note: Session will continue running until user ends the conversation
         # Final costs and avatar duration are logged in end_conversation tool
 
@@ -263,8 +269,6 @@ async def entrypoint(ctx: JobContext):
 if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
-            entrypoint_fnc=entrypoint,
-            prewarm_fnc=prewarm,
-            agent_name="my-voice-agent"
+            entrypoint_fnc=entrypoint, prewarm_fnc=prewarm, agent_name="my-voice-agent"
         )
     )

@@ -1,8 +1,10 @@
 """Integration tests for the appointment booking agent"""
+
 import pytest
 from livekit.agents import AgentSession, inference, llm
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from agent import Assistant
@@ -87,7 +89,9 @@ async def test_agent_refuses_booking_without_identification() -> None:
         await session.start(Assistant())
 
         # Try to book without identifying
-        result = await session.run(user_input="I'd like to book an appointment for tomorrow at 10 AM")
+        result = await session.run(
+            user_input="I'd like to book an appointment for tomorrow at 10 AM"
+        )
 
         # Agent should redirect to get phone number first
         await (
@@ -113,7 +117,9 @@ async def test_agent_handles_appointment_booking_flow() -> None:
         await session.start(Assistant())
 
         # Step 1: User asks to book appointment
-        result = await session.run(user_input="My number is 555-1234 and I'd like to book an appointment")
+        result = await session.run(
+            user_input="My number is 555-1234 and I'd like to book an appointment"
+        )
 
         # Should identify user first
         event = result.expect.next_event()
@@ -135,7 +141,9 @@ async def test_agent_retrieves_appointments() -> None:
         await session.start(Assistant())
 
         # Identify and ask for appointments
-        result = await session.run(user_input="My number is 555-1234. What appointments do I have?")
+        result = await session.run(
+            user_input="My number is 555-1234. What appointments do I have?"
+        )
 
         # Should identify user
         event = result.expect.next_event()
@@ -143,9 +151,11 @@ async def test_agent_retrieves_appointments() -> None:
 
         # Should retrieve appointments
         events = list(result.events)
-        tool_calls = [e for e in events if hasattr(e, 'tool_call')]
-        tool_names = [tc.tool_call.name for tc in tool_calls if hasattr(tc, 'tool_call')]
-        
+        tool_calls = [e for e in events if hasattr(e, "tool_call")]
+        tool_names = [
+            tc.tool_call.name for tc in tool_calls if hasattr(tc, "tool_call")
+        ]
+
         assert "retrieve_appointments" in tool_names
 
 
@@ -162,8 +172,8 @@ async def test_agent_handles_goodbye() -> None:
 
         # Should use end_conversation tool
         events = list(result.events)
-        tool_calls = [e for e in events if hasattr(e, 'tool_call')]
-        
+        tool_calls = [e for e in events if hasattr(e, "tool_call")]
+
         if tool_calls:
             # Expect end_conversation to be called
             last_tool = tool_calls[-1]

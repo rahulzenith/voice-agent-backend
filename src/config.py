@@ -36,9 +36,9 @@ class Config:
     working_hours_start: int = 9
     working_hours_end: int = 17
     appointment_duration: int = 30
-    available_times: List[str] = field(default_factory=lambda: [
-        "09:00", "10:00", "11:00", "14:00", "15:00", "16:00"
-    ])
+    available_times: List[str] = field(
+        default_factory=lambda: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"]
+    )
 
     @classmethod
     def from_env(cls):
@@ -51,7 +51,9 @@ class Config:
             azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
             azure_openai_api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
             azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", ""),
-            azure_openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-01-preview"),
+            azure_openai_api_version=os.getenv(
+                "AZURE_OPENAI_API_VERSION", "2024-10-01-preview"
+            ),
             cartesia_api_key=os.getenv("CARTESIA_API_KEY", ""),
             avatar_provider=os.getenv("AVATAR_PROVIDER", "beyond_presence"),
             avatar_api_key=os.getenv("BEYOND_PRESENCE_API_KEY"),

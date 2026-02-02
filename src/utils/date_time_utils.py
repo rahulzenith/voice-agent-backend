@@ -1,9 +1,10 @@
 """Date and time utility functions"""
+
 from datetime import datetime, date, time
 import pytz
 
 # IST timezone
-IST = pytz.timezone('Asia/Kolkata')
+IST = pytz.timezone("Asia/Kolkata")
 
 
 def format_time_for_display(time_str: str) -> str:
@@ -13,10 +14,10 @@ def format_time_for_display(time_str: str) -> str:
             time_obj = datetime.strptime(time_str, "%H:%M:%S").time()
         else:
             time_obj = time_str
-        
+
         hour = time_obj.hour
         minute = time_obj.minute
-        
+
         if hour == 0:
             return f"12:{minute:02d} AM" if minute else "12 AM"
         elif hour < 12:
@@ -24,7 +25,7 @@ def format_time_for_display(time_str: str) -> str:
         elif hour == 12:
             return f"12:{minute:02d} PM" if minute else "12 PM"
         else:
-            return f"{hour-12}:{minute:02d} PM" if minute else f"{hour-12} PM"
+            return f"{hour - 12}:{minute:02d} PM" if minute else f"{hour - 12} PM"
     except:
         return str(time_str)
 

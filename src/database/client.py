@@ -1,4 +1,5 @@
 """Supabase client setup and helper functions"""
+
 import logging
 from typing import Optional
 from supabase import create_client, Client
@@ -12,7 +13,9 @@ class SupabaseClient:
     _instance: Optional[Client] = None
 
     @classmethod
-    def get_client(cls, supabase_url: Optional[str] = None, supabase_key: Optional[str] = None) -> Client:
+    def get_client(
+        cls, supabase_url: Optional[str] = None, supabase_key: Optional[str] = None
+    ) -> Client:
         """
         Get or create Supabase client instance
 
@@ -25,7 +28,9 @@ class SupabaseClient:
         """
         if cls._instance is None:
             if not supabase_url or not supabase_key:
-                raise ValueError("supabase_url and supabase_key are required for first initialization")
+                raise ValueError(
+                    "supabase_url and supabase_key are required for first initialization"
+                )
 
             cls._instance = create_client(supabase_url, supabase_key)
             logger.info("Supabase client initialized")

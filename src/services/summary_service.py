@@ -1,4 +1,5 @@
 """Service for generating LLM-based conversation summaries."""
+
 import logging
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import HumanMessage
@@ -10,21 +11,23 @@ logger = logging.getLogger(__name__)
 class SummaryService:
     """
     Generate professional summaries from conversation transcripts using LLM via LangChain.
-    
+
     Methods:
     - generate_from_transcript(): Generate summary using LLM from transcript
     """
-    
+
     @staticmethod
-    async def generate_from_transcript(transcript: str, contact_number: str, appointments: list) -> str:
+    async def generate_from_transcript(
+        transcript: str, contact_number: str, appointments: list
+    ) -> str:
         """
         Generate professional summary from transcript using LLM via LangChain.
-        
+
         Args:
             transcript: Full conversation transcript
             contact_number: User's phone number
             appointments: List of scheduled appointment dicts (for context)
-            
+
         Returns:
             Multi-sentence summary of the call
         """
@@ -37,11 +40,13 @@ class SummaryService:
                 api_version=config.azure_openai_api_version,
                 temperature=0.7,  # Slightly creative for summaries
             )
-            
+
             # Build context about user's appointments
             appointments_context = ""
             if appointments:
-                scheduled = [apt for apt in appointments if apt.get("status") == "scheduled"]
+                scheduled = [
+                    apt for apt in appointments if apt.get("status") == "scheduled"
+                ]
                 if scheduled:
                     apt_details = []
                     for apt in scheduled[:5]:  # Limit to 5 most recent
@@ -50,7 +55,7 @@ class SummaryService:
                         apt_details.append(f"{date} at {time}")
                     if apt_details:
                         appointments_context = f"\n\nUser's current scheduled appointments: {', '.join(apt_details)}."
-            
+
             # Create prompt for summary generation
             summary_prompt = f"""You are a professional call summary generator. Analyze the following conversation transcript and create a concise, professional summary.
 
@@ -71,18 +76,28 @@ SUMMARY:"""
             # Generate summary using LangChain
             messages = [HumanMessage(content=summary_prompt)]
             response = await llm_client.ainvoke(messages)
-            
+
             # Extract text from response
-            summary = response.content.strip() if hasattr(response, 'content') else str(response).strip()
-            
+            summary = (
+                response.content.strip()
+                if hasattr(response, "content")
+                else str(response).strip()
+            )
+
             # Clean up response (remove any markdown formatting if present)
             if summary.startswith("**"):
                 # Remove markdown bold if present
                 summary = summary.replace("**", "")
-            
-            return summary if summary else f"Call with user {contact_number}. Conversation completed successfully."
-            
+
+            return (
+                summary
+                if summary
+                else f"Call with user {contact_number}. Conversation completed successfully."
+            )
+
         except Exception as e:
             logger.error(f"Error generating summary with LLM: {e}", exc_info=True)
             # Fallback to simple summary
-            return f"Call with user {contact_number}. Conversation completed successfully."
+            return (
+                f"Call with user {contact_number}. Conversation completed successfully."
+            )
